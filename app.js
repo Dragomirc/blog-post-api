@@ -6,6 +6,7 @@ const path = require("path");
 const multer = require("multer");
 const uuidv4 = require("uuid/v4");
 const feedHandler = require("./routes/feed.js");
+const authHandler = require("./routes/auth.js");
 
 const app = express();
 const storageFilter = multer.diskStorage({
@@ -41,11 +42,13 @@ app.use((req, res, next) => {
     next();
 });
 app.use("/feed", feedHandler);
+app.use("/auth", authHandler);
 app.use((error, req, res, next) => {
     console.log(error);
     const status = error.statusCode || 500;
     const message = error.message;
-    res.status(status).json({ message });
+    const data = error.data;
+    res.status(status).json({ message, data });
 });
 mongoose
     .connect(

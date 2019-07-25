@@ -2,6 +2,7 @@ const { validationResult } = require("express-validator/check");
 const fs = require("fs");
 const path = require("path");
 const Post = require("../models/post");
+const User = require("../models/user");
 exports.getPosts = (req, res, next) => {
     const currentPage = req.query.page || 1;
     const perPage = 2;
@@ -45,17 +46,31 @@ exports.postPost = (req, res, next) => {
     }
     const imageUrl = req.file.path.replace("\\", "/");
     const { title, content } = req.body;
+    const { userId } = req;
+    let creator;
     const post = new Post({
         title,
         content,
         imageUrl,
-        creator: { name: "Dragomir" }
+        creator: userId
     });
     post.save()
-        .then(post => {
+        .then(result => {
+            return User.findById(userId);
+        })
+        .then(user => {
+            creator = user;
+            user.posts.push({ postId: post._id });
+            return user.save();
+        })
+        .then(result => {
             res.status(201).json({
                 message: "Post created successfully!",
-                post
+                post,
+                creator: {
+                    _id: creator._id,
+                    name: creator.name
+                }
             });
         })
         .catch(err => {
@@ -92,6 +107,7 @@ exports.updatePost = (req, res, next) => {
         throw error;
     }
     const { postId } = req.params;
+    const { userId } = req;
     const { title, content } = req.body;
     let imageUrl = req.body.image;
     if (req.file) {
@@ -104,6 +120,11 @@ exports.updatePost = (req, res, next) => {
     }
     Post.findById(postId)
         .then(post => {
+            if (userId !== post.creator.toString()) {
+                const error = new Error("Cannot eidt other users posts");
+                error.statusCode = 403;
+                throw error;
+            }
             if (!post) {
                 const error = new Error("Could not find post.");
                 error.statusCode = 404;
@@ -134,8 +155,14 @@ const clearImage = filePath => {
 };
 exports.deletePost = (req, res, next) => {
     const { postId } = req.params;
+    const { userId } = req;
     Post.findById(postId)
         .then(post => {
+            if (userId !== post.creator.toString()) {
+                const error = new Error("Cannot delete other users posts");
+                error.statusCode = 403;
+                throw error;
+            }
             if (!post) {
                 const error = new Error("Could not find post.");
                 error.statusCode = 404;
@@ -146,12 +173,19 @@ exports.deletePost = (req, res, next) => {
             return Post.findByIdAndRemove(postId);
         })
         .then(() => {
+            return User.findById(userId);
+        })
+        .then(user => {
+            user.posts.pull(postId);
+            return user.save();
+        })
+        .then(() => {
             res.status(200).json({ message: "Post successfully deleted!" });
         })
         .catch(err => {
             if (!err.statusCode) {
                 err.statusCode = 500;
-                next(err);
             }
+            next(err);
         });
 };
