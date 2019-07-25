@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.get("/posts", isAuth, feedController.getPosts);
 router.get("/post/:postId", isAuth, feedController.getPost);
+router.get("/status", isAuth, feedController.getStatus);
 router.post(
     "/post",
     isAuth,
@@ -31,6 +32,17 @@ router.put(
             .isLength({ min: 5 })
     ],
     feedController.updatePost
+);
+router.patch(
+    "/status",
+    [
+        body("status")
+            .trim()
+            .not()
+            .isEmpty()
+    ],
+    isAuth,
+    feedController.updateStatus
 );
 router.delete("/post/:postId", isAuth, feedController.deletePost);
 
