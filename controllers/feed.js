@@ -1,6 +1,7 @@
 const { validationResult } = require("express-validator/check");
 const fs = require("fs");
 const path = require("path");
+const io = require("../socket");
 const Post = require("../models/post");
 const User = require("../models/user");
 exports.getPosts = async (req, res, next) => {
@@ -9,8 +10,11 @@ exports.getPosts = async (req, res, next) => {
     try {
         const totalItems = await Post.find().countDocuments();
         const posts = await Post.find()
+            .sort({ createdAt: -1 })
+            .populate("creator")
             .skip((currentPage - 1) * perPage)
             .limit(perPage);
+
         res.status(200).json({
             message: "Fetched posts succesfully",
             posts,
@@ -53,6 +57,10 @@ exports.postPost = async (req, res, next) => {
         const user = await User.findById(userId);
         user.posts.push({ postId: post._id });
         await user.save();
+        io.getIo().emit("posts", {
+            action: "create",
+            post: { ...post._doc, creator: { _id: userId, name: user.name } }
+        });
         res.status(201).json({
             message: "Post created successfully!",
             post,
@@ -106,9 +114,9 @@ exports.updatePost = async (req, res, next) => {
         throw error;
     }
     try {
-        const post = await Post.findById(postId);
+        const post = await Post.findById(postId).populate("creator");
 
-        if (userId !== post.creator.toString()) {
+        if (userId !== post.creator._id.toString()) {
             const error = new Error("Cannot eidt other users posts");
             error.statusCode = 403;
             throw error;
@@ -125,6 +133,10 @@ exports.updatePost = async (req, res, next) => {
         post.imageUrl = imageUrl;
         post.content = content;
         const updatedPost = await post.save();
+        io.getIo().emit("posts", {
+            action: "update",
+            post: updatedPost
+        });
         res.status(200).json({ message: "Post updated!", post: updatedPost });
     } catch (err) {
         if (!err.statusCode) {
@@ -155,10 +167,11 @@ exports.deletePost = async (req, res, next) => {
         }
         //Check logged in user
         clearImage(post.imageUrl);
-        await Post.findByIdAndRemove(postId);
+        const pos = await Post.findByIdAndRemove(postId);
         const user = await User.findById(userId);
         user.posts.pull(postId);
         await user.save();
+        io.getIo().emit("posts", { action: "delete", post: pos });
         res.status(200).json({ message: "Post successfully deleted!" });
     } catch (err) {
         if (!err.statusCode) {

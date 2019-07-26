@@ -57,6 +57,10 @@ mongoose
         }@cluster0-lie0b.mongodb.net/blog-post?retryWrites=true&w=majority`
     )
     .then(result => {
-        app.listen(8080);
+        const server = app.listen(8080);
+        const io = require("./socket").init(server);
+        io.on("connection", socket => {
+            console.log("Client connected");
+        });
     })
     .catch(console.log);
