@@ -52,9 +52,11 @@ app.use((error, req, res, next) => {
 });
 mongoose
     .connect(
-        `mongodb+srv://Dragomir:${
-            process.env.DATABASE_PASSWORD
-        }@cluster0-lie0b.mongodb.net/blog-post?retryWrites=true&w=majority`
+        `mongodb+srv://${process.env.MONGO_USER}:${
+            process.env.MONGO_PASSWORD
+        }@cluster0-lie0b.mongodb.net/${
+            process.env.MONGO_DEFAULT_DATABASE
+        }?retryWrites=true&w=majority`
     )
     .then(result => {
         const server = app.listen(8080);
