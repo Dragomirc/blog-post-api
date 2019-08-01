@@ -3,11 +3,11 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const path = require("path");
+const graphqlHttp = require("express-graphql");
 const multer = require("multer");
 const uuidv4 = require("uuid/v4");
-const feedHandler = require("./routes/feed.js");
-const authHandler = require("./routes/auth.js");
-
+const graphqlSchema = require("./graphql/schema");
+const graphqlResolver = require("./graphql/resolvers");
 const app = express();
 const storageFilter = multer.diskStorage({
     destination: function(req, file, cb) {
@@ -39,10 +39,29 @@ app.use((req, res, next) => {
         "Access-Control-Allow-Headers",
         "Content-Type, Authorization"
     );
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
     next();
 });
-app.use("/feed", feedHandler);
-app.use("/auth", authHandler);
+
+app.use(
+    "/graphql",
+    graphqlHttp({
+        schema: graphqlSchema,
+        rootValue: graphqlResolver,
+        graphiql: true,
+        formatError(err) {
+            if (!err.originalError) {
+                return err;
+            }
+            const data = err.originalError.data;
+            const message = err.message || "An error occured.";
+            const code = err.originalError.code || 500;
+            return { message, data, status: code };
+        }
+    })
+);
 app.use((error, req, res, next) => {
     console.log(error);
     const status = error.statusCode || 500;
@@ -56,11 +75,7 @@ mongoose
             process.env.DATABASE_PASSWORD
         }@cluster0-lie0b.mongodb.net/blog-post?retryWrites=true&w=majority`
     )
-    .then(result => {
-        const server = app.listen(8080);
-        const io = require("./socket").init(server);
-        io.on("connection", socket => {
-            console.log("Client connected");
-        });
+    .then(() => {
+        app.listen(8080);
     })
     .catch(console.log);
